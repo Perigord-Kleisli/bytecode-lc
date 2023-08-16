@@ -1,0 +1,2 @@
+true = \x y. y
+main = true 4 2
