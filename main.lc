@@ -1,4 +1,0 @@
-s = λw y x. y (w y x)
-+ = λn m. n s m
-true = λx y. x
-main = (+ 3 2)

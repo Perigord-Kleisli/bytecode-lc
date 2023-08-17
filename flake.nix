@@ -1,5 +1,5 @@
 {
-  description = "srid/haskell-template: Nix template for Haskell projects";
+  description = "A Lambda Calculus Bytecode Interpreter";
   inputs = {
     nixpkgs.url = "github:nixos/nixpkgs/nixpkgs-unstable";
     systems.url = "github:nix-systems/default";
@@ -10,49 +10,32 @@
   };
 
   outputs = inputs:
-    inputs.flake-parts.lib.mkFlake { inherit inputs; } {
+    inputs.flake-parts.lib.mkFlake {inherit inputs;} {
       systems = import inputs.systems;
       imports = [
         inputs.haskell-flake.flakeModule
         inputs.treefmt-nix.flakeModule
       ];
-      perSystem = { self', system, lib, config, pkgs, ... }: {
-        # Our only Haskell project. You can have multiple projects, but this template
-        # has only one.
-        # See https://github.com/srid/haskell-flake/blob/master/example/flake.nix
+      perSystem = {
+        self',
+        config,
+        pkgs,
+        ...
+      }: {
         haskellProjects.default = {
-          # The base package set (this value is the default)
-          # basePackages = pkgs.haskellPackages;
-
-          # Packages to add on top of `basePackages`
-          packages = {
-            # Add source or Hackage overrides here
-            # (Local packages are added automatically)
-            /*
-            aeson.source = "1.5.0.0" # Hackage version
-            shower.source = inputs.shower; # Flake input
-            */
-          };
-
-          # Add your package overrides here
-          settings = {
-            /*
-            haskell-template = {
-              haddock = false;
-            };
-            aeson = {
-              check = false;
-            };
-            */
-          };
-
           # Development shell configuration
           devShell = {
             hlsCheck.enable = false;
           };
 
+          packages = {
+            # directory.source = "1.3.8.1";
+            # filepath.source = "1.4.100.4";
+            # unix.source = "2.8.1.1";
+          };
+
           # What should haskell-flake add to flake outputs?
-          autoWire = [ "packages" "apps" "checks" ]; # Wire all but the devShell
+          autoWire = ["packages" "apps" "checks"]; # Wire all but the devShell
         };
 
         # Auto formatters. This also adds a flake check to ensure that the
@@ -76,12 +59,12 @@
         };
 
         # Default package & app.
-        packages.default = self'.packages.haskell-template;
-        apps.default = self'.apps.haskell-template;
+        packages.default = self'.packages."lambda-calculus-diagram";
+        apps.default = self'.apps."lambda-calculus-diagram";
 
         # Default shell.
         devShells.default = pkgs.mkShell {
-          name = "haskell-template";
+          name = "lambda-calculus-diagram";
           # See https://zero-to-flakes.com/haskell-flake/devshell#composing-devshells
           inputsFrom = [
             config.haskellProjects.default.outputs.devShell
