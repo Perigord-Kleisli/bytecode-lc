@@ -1,8 +1,10 @@
+{-# LANGUAGE QuasiQuotes #-}
 {-# LANGUAGE NoOverloadedLists #-}
 
-module LCDiagram.Parser (LCExpr (..), LCDec (..), lcParser, lcExpr, lcDec, Parser) where
+module LCDiagram.Parser (LCExpr (..), LCDec (..), lcParser, lcExpr, lcDec, lcImport, Parser) where
 
 import Data.Char
+import PyF (fmt)
 import Text.Megaparsec as M
 import Text.Megaparsec.Char (char, space1)
 import Text.Megaparsec.Char.Lexer qualified as L
@@ -16,7 +18,7 @@ data LCExpr
 
 data LCDec
   = Def Text LCExpr
-  | Import FilePath
+  | ImportDec FilePath
   deriving stock (Show, Eq)
 
 type Parser = Parsec Void Text
@@ -39,8 +41,15 @@ symbol = L.symbol space
 parens :: forall {a}. Parser a -> Parser a
 parens = between (symbol "(") (symbol ")") . lexeme
 
+reserved :: [Tokens Text]
+reserved = ["import"]
+
 identifier :: Parser Text
-identifier = takeWhile1P (Just "a valid Var character") validVarChar
+identifier =
+  takeWhile1P (Just "a valid Var character") validVarChar >>= \s ->
+    if s `elem` reserved
+      then fail [fmt|Identifier cannot be reserved keyword '{s}'|]
+      else return s
   where
     validVarChar c
       | isSpace c
@@ -51,7 +60,11 @@ identifier = takeWhile1P (Just "a valid Var character") validVarChar
       | otherwise = True
 
 defIdentifier :: Parser Text
-defIdentifier = takeWhile1P (Just "a valid Var character") validVarChar
+defIdentifier =
+  takeWhile1P (Just "a valid Var character") validVarChar >>= \s ->
+    if s `elem` reserved
+      then fail [fmt|Identifier cannot be reserved keyword '{s}'|]
+      else return s
   where
     validVarChar c
       | isSpace c
@@ -63,8 +76,6 @@ defIdentifier = takeWhile1P (Just "a valid Var character") validVarChar
 
 var :: Parser LCExpr
 var = Var <$> identifier
-
--- >>> parseTest fromNumber "23"
 
 fromNumber :: Parser LCExpr
 fromNumber = Abs "f" . Abs "x" . intToChurch <$> L.decimal
@@ -93,17 +104,18 @@ lcExpr = indented $ choice [application, term]
 lcDec :: Parser LCDec
 lcDec = nonIndented $ Def <$> (lexeme defIdentifier <* symbol "=") <*> lcExpr
 
-importP :: Parser LCDec
-importP =
+lcImport :: Parser LCDec
+lcImport =
   nonIndented
-    . fmap Import
+    . fmap ImportDec
+    $ lexeme
     $ symbol "import" *> ((char '"' >> manyTill L.charLiteral (char '"')) <?> "string literal")
 
 lcParser :: Parser [LCDec]
 lcParser =
   M.some
     ( choice
-        [ importP <?> "Import Statement"
+        [ lcImport <?> "Import Statement"
         , lcDec <?> "Variable Definition"
         ]
     )
