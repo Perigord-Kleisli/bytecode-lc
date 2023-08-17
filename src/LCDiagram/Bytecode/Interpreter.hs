@@ -123,7 +123,8 @@ exec = do
       closure <- pop
       let fromStackFrame = #stack . _head . #symbols . ix valName
           fromClosure = #stack . _head . #instructions . #_Function . #captures . ix valName
-      gets (^? failing fromStackFrame fromClosure)
+          fromGlobal = #globals . ix valName
+      gets (^? (fromGlobal `failing` fromStackFrame `failing` fromClosure))
         >>= \case
           Just v -> push (closure & #_Function . #captures %~ M.insert valName v)
           Nothing -> fail [fmt|Local Variable '{valName}' does not exist|]
@@ -138,10 +139,11 @@ exec = do
           Nothing -> fail [fmt|Variable '{name}' does not exist|]
       advance
     Trace -> do
-      pop >>= \case
-        Value x -> putStrLn $ "Value " <> show x
+      pop >>= \x -> case x of
+        Value val' -> putStrLn $ "Value " <> show val'
         Succesor _ -> putStrLn "<<SUCCESOR>>"
         f -> do
+          globals <- gets globals
           input <- gets input
           succesor <- gets succesor
           (>>= print) $
@@ -157,7 +159,8 @@ exec = do
                         , content = [Succesor succesor, Value input]
                         }
                     ]
-                , globals = []
+                , globals
                 }
+          push x
       advance
     _ -> error "unimplemented"

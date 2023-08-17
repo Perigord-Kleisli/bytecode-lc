@@ -1,9 +1,8 @@
 {-# LANGUAGE NoOverloadedLists #-}
 
-module LCDiagram.Parser (LCExpr (..), LCDec (..), lcParser, lcExpr) where
+module LCDiagram.Parser (LCExpr (..), LCDec (..), lcParser, lcExpr, lcDec, Parser) where
 
 import Data.Char
-import Data.Maybe (fromJust)
 import Text.Megaparsec as M
 import Text.Megaparsec.Char (char, space1)
 import Text.Megaparsec.Char.Lexer qualified as L
@@ -91,8 +90,8 @@ application = C.chainl1 (lexeme term) (pure App)
 lcExpr :: Parser LCExpr
 lcExpr = indented $ choice [application, term]
 
-definition :: Parser LCDec
-definition = nonIndented $ Def <$> (lexeme defIdentifier <* symbol "=") <*> lcExpr
+lcDec :: Parser LCDec
+lcDec = nonIndented $ Def <$> (lexeme defIdentifier <* symbol "=") <*> lcExpr
 
 importP :: Parser LCDec
 importP =
@@ -105,7 +104,7 @@ lcParser =
   M.some
     ( choice
         [ importP <?> "Import Statement"
-        , definition <?> "Variable Definition"
+        , lcDec <?> "Variable Definition"
         ]
     )
     <* eof

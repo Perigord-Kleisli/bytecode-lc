@@ -1,2 +1,4 @@
-true = \x y. y
-main = true 4 2
+s = λw y x. y (w y x)
++ = λn m. n s m
+true = λx y. x
+main = (+ 3 2)

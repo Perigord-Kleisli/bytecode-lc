@@ -45,7 +45,7 @@ lcCompiler src = execState (mapM_ lcDecCompiler src) (CompilerState [] "") ^. #s
       return $ [Load lambdaName] <> fromList caps
     lcExprCompiler (App (Var "trace") arg) = do
       arg' <- lcExprCompiler arg
-      return $ arg' <> [Trace, Call]
+      return $ arg' <> [Trace]
     lcExprCompiler (App f arg) = do
       f' <- lcExprCompiler f
       arg' <- lcExprCompiler arg
