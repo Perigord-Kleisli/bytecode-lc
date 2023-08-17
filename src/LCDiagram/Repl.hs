@@ -23,7 +23,7 @@ import Text.Megaparsec
 
 lcRepl :: (VM m a, m ~ StateT (VMState a) IO, a ~ Int) => SymbolTable a -> IO ()
 lcRepl table = do
-  historyFile <- liftIO $ fmap (</> "lc") <$> lookupEnv "XDG_STATE_HOME" 
+  historyFile <- liftIO $ fmap (</> "lc") <$> lookupEnv "XDG_STATE_HOME"
   let autoAddHistory = True
       fnCompletion = completeWord' Nothing isSpace \s -> do
         stackFrame <- gets (^. #stack . _head . #symbols)

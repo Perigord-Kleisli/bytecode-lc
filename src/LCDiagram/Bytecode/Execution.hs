@@ -2,10 +2,10 @@
 
 module LCDiagram.Bytecode.Execution where
 
+import Control.Lens
 import Data.Map qualified as M
 import LCDiagram.Bytecode.Interpreter
 import LCDiagram.Bytecode.Types
-import Control.Lens
 
 runLC :: (Show a, Num a) => SymbolTable a -> IO a
 runLC table = do

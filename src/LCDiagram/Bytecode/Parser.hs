@@ -37,10 +37,10 @@ binding = do
   pure (name, Function $ FnVals instructions' [])
 
 lcoHeader :: ByteString
-lcoHeader = pack [1,9,3,0]
+lcoHeader = pack [1, 9, 3, 0]
 
 symboltable :: Parser (SymbolTable a)
-symboltable = do 
+symboltable = do
   _ <- string lcoHeader <?> "LCO Header"
   Map.fromList <$> M.many binding
 

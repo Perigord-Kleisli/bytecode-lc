@@ -13,11 +13,11 @@ import Data.Map qualified as M
 import Data.Sequence qualified as S
 import Data.Sequence.Lens (viewL)
 import Data.Text (replace)
+import GHC.IO.Handle (hSetEcho)
 import LCDiagram.Bytecode.Compiler (compileFile)
 import LCDiagram.Bytecode.Types
 import PyF
 import System.IO (getChar)
-import GHC.IO.Handle (hSetEcho)
 
 data VMState a = VMState
   { input :: a

@@ -22,7 +22,7 @@ data Instruction
 
 type SymbolTable a = Map Text (Function a)
 
-data FnVals a = FnVals {code :: Seq Instruction, captures :: SymbolTable a} deriving stock Generic
+data FnVals a = FnVals {code :: Seq Instruction, captures :: SymbolTable a} deriving stock (Generic)
 
 data Function a
   = Function (FnVals a)
@@ -31,7 +31,7 @@ data Function a
   deriving stock (Generic)
 
 instance Show a => Show (Function a) where
-  show (Function (FnVals{code}) ) = "<<" <> Prelude.show (toList code) <> ">>"
+  show (Function (FnVals {code})) = "<<" <> Prelude.show (toList code) <> ">>"
   show (Value a) = "Value " ++ Prelude.show a
   show (Succesor _) = "<<SUCCESOR>>"
 
