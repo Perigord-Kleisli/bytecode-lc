@@ -3,17 +3,7 @@ name:               lambda-calculus-diagram
 version:            0.1.0.0
 license:            MIT
 copyright:          2022 Perigord Truffle
-
--- TODO: Before hackage release.
--- A short (one-line) description of the package.
--- synopsis:
-
--- A longer description of the package.
--- description:
-
--- A URL where users can report bugs.
--- bug-reports:
-
+synopsis:           A Bytecode Interpreted Lambda Calculus
 extra-source-files:
   LICENSE
   README.md
@@ -32,6 +22,7 @@ common shared
   default-extensions:
     NoStarIsType
     BangPatterns
+    BlockArguments
     ConstraintKinds
     DataKinds
     DeriveDataTypeable
@@ -57,9 +48,9 @@ common shared
     MultiParamTypeClasses
     MultiWayIf
     NumericUnderscores
-    OverloadedStrings
-    OverloadedLists
     OverloadedLabels
+    OverloadedLists
+    OverloadedStrings
     PolyKinds
     PostfixOperators
     RankNTypes
@@ -78,17 +69,16 @@ common shared
     , directory
     , exceptions
     , filepath
+    , generic-lens
     , haskeline
+    , lens
     , megaparsec
+    , mtl
     , parser-combinators
     , parsers
-    , mtl
-    , relude              >=1.0
-    , shower
     , PyF
-    , lens
-    , generic-lens
-    , vector
+    , relude
+    , shower
 
   hs-source-dirs:     src
   default-language:   Haskell2010
@@ -96,11 +86,12 @@ common shared
 executable lc
   import:        shared
   other-modules:
-    LCDiagram.Bytecode.Parser
+    LCDiagram.Args
     LCDiagram.Bytecode.Compiler
     LCDiagram.Bytecode.Execution
-    LCDiagram.Bytecode.Types
     LCDiagram.Bytecode.Interpreter
+    LCDiagram.Bytecode.Parser
+    LCDiagram.Bytecode.Types
     LCDiagram.Parser
     LCDiagram.Repl
 

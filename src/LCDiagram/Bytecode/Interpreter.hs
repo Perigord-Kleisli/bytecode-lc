@@ -4,16 +4,20 @@
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE QuasiQuotes #-}
 
-module LCDiagram.Bytecode.Interpreter (exec, VMState (..)) where
+module LCDiagram.Bytecode.Interpreter (exec, VMState (..), VM) where
 
 import Control.Lens
+import Control.Monad.Catch
 import Data.Generics.Labels ()
 import Data.Map qualified as M
 import Data.Sequence qualified as S
 import Data.Sequence.Lens (viewL)
 import Data.Text (replace)
+import LCDiagram.Bytecode.Compiler (compileFile)
 import LCDiagram.Bytecode.Types
 import PyF
+import System.IO (getChar)
+import GHC.IO.Handle (hSetEcho)
 
 data VMState a = VMState
   { input :: a
@@ -23,7 +27,7 @@ data VMState a = VMState
   }
   deriving stock (Generic)
 
-type VM m a = (MonadState (VMState a) m, MonadFail m, MonadIO m, Show a)
+type VM m a = (MonadState (VMState a) m, MonadFail m, MonadIO m, MonadMask m, Show a)
 
 getInstruction :: VM m a => m Instruction
 getInstruction = do
@@ -72,7 +76,6 @@ advance = do
       #stack . _head . #instructions . #_Function . #code .= xs
       exec
     _ -> fail "Tried to advance but no next instruction"
-{-# INLINE advance #-}
 
 _logVM :: forall a m. (VM m a) => m ()
 _logVM = do
@@ -112,9 +115,6 @@ exec = do
             #stack %= (StackFrame {content = [], symbols = [], instructions = f} <|)
             push arg
             exec
-    Func name program -> do
-      #globals %= M.insert name (Function $ FnVals program [])
-      advance
     Store name -> do
       v <- pop
       #stack . _head . #symbols %= M.insertWith const name v
@@ -163,4 +163,23 @@ exec = do
                 }
           push x
       advance
-    _ -> error "unimplemented"
+    Import file -> do
+      syms <- liftIO $ compileFile file
+      #globals <>= syms
+      advance
+    Read -> do
+      liftIO $ hSetEcho stdin False
+      c <- fromEnum <$> liftIO getChar
+      liftIO $ hSetEcho stdin True
+      x' <- uniqueName "#read."
+      #globals %= M.insert x' (Function (FnVals (fromList $ concat $ replicate c [Load "f", Call]) []))
+      push (Function (FnVals [Store "f", Load x', MakeClosure "f"] []))
+      advance
+      where
+        uniqueName name = do
+          fromStackFrame <- gets (^. #stack . _head . #symbols)
+          fromClosure <- gets (^. #stack . _head . #instructions . #_Function . #captures)
+          fromGlobal <- gets (^. #globals)
+          if M.member name fromStackFrame || M.member name fromClosure || M.member name fromGlobal
+            then uniqueName (name <> "_.")
+            else return name

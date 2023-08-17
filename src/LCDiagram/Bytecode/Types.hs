@@ -17,7 +17,6 @@ data Instruction
   | MakeClosure Text -- `Text` partains to the variable in the symbol table to capture
   | Store Text
   | Load Text
-  | Func Text (Seq Instruction)
   | Import FilePath
   deriving stock (Show)
 
