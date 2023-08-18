@@ -33,6 +33,7 @@ lcRepl table = do
           | k <- ["trace", "import", "read"] <> keys
           , '.' `notElem` k
           , s `isPrefixOf` k
+          , k /= "main"
           ]
       complete =
         completeQuotedWord
@@ -48,10 +49,11 @@ lcRepl table = do
                       forM contents \x ->
                         liftA2 (||) (doesDirectoryExist x) (doesDirectoryExist $ targetDir </> x)
                     return
-                      [ let f' = (if isDir then f <> "/" else f)
+                      [ let f' = (if isDir then f <> "/" else dropExtensions f)
                          in Completion f' f' (not isDir)
                       | (f, isDir) <- zip contents areDirs
                       , s `isPrefixOf` f
+                      , "lc" `isExtensionOf` f || "lc.o" `isExtensionOf` f || isDir
                       ]
               dir -> do
                 importPaths <- maybe [] (splitOn (== ':')) <$> lookupEnv "LC_IMPORT_PATH"
@@ -65,10 +67,11 @@ lcRepl table = do
                             forM contents \x ->
                               liftA2 (||) (doesDirectoryExist x) (doesDirectoryExist $ targetDir </> x)
                           return
-                            [ let f' = (if isDir then f <> "/" else f)
+                            [ let f' = (if isDir then f <> "/" else dropExtensions f)
                                in Completion (dir </> f') f' (not isDir)
                             | (f, isDir) <- zip contents areDirs
                             , takeFileName s `isPrefixOf` f
+                            , "lc" `isExtensionOf` f || "lc.o" `isExtensionOf` f || isDir
                             ]
                       )
                       (return [])
