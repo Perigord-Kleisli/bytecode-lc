@@ -81,7 +81,7 @@ readFromImportPath path = do
   paths <- maybe [] (splitOn (== ':')) <$> lookupEnv "LC_IMPORT_PATH"
   maybe (fail $ "file '" <> path <> "' does not exist") pure . viaNonEmpty head =<< mapMaybeM getExisting (path : paths)
   where
-    getExisting ((</> path) -> path') = do
+    getExisting path' = do
       ifM
         (doesFileExist path')
         (Just <$> readFileBS path')
@@ -91,6 +91,15 @@ readFromImportPath path = do
         $ ifM
           (doesFileExist $ path' <> ".lc.o")
           (Just <$> readFileBS (path' <> ".lc.o"))
+        $ ifM
+          (doesFileExist (path' </> path))
+          (Just <$> readFileBS (path' </> path))
+        $ ifM
+          (doesFileExist (path' </> path <> ".lc"))
+          (Just <$> readFileBS (path' </> path <> ".lc"))
+        $ ifM
+          (doesFileExist (path' </> path <> "lc.o"))
+          (Just <$> readFileBS (path </> path <> "lc.o"))
           (pure Nothing)
 
 compileFile :: FilePath -> IO (SymbolTable a)
