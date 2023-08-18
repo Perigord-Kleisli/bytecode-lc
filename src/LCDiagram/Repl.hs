@@ -1,5 +1,3 @@
-{-# LANGUAGE OverloadedLists #-}
-{-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE RecordWildCards #-}
 
 module LCDiagram.Repl (lcRepl) where
@@ -8,18 +6,18 @@ import Control.Exception (IOException)
 import Control.Lens
 import Control.Monad.Catch
 import Data.Char (isSpace)
-import Data.Generics.Labels ()
 import Data.Map qualified as M
+import System.Console.Haskeline
+import System.Console.Haskeline.History (historyLines)
+import System.Directory
+import System.FilePath
+import Text.Megaparsec hiding (try)
+
 import LCDiagram.Bytecode.Compiler
 import LCDiagram.Bytecode.Execution
 import LCDiagram.Bytecode.Interpreter (VM, VMState (..))
 import LCDiagram.Bytecode.Types
 import LCDiagram.Parser
-import System.Console.Haskeline
-import System.Console.Haskeline.History (historyLines)
-import System.Directory
-import System.FilePath
-import Text.Megaparsec
 
 lcRepl :: (VM m a, m ~ StateT (VMState a) IO, a ~ Int) => SymbolTable a -> IO ()
 lcRepl table = do
@@ -42,25 +40,38 @@ lcRepl table = do
           "\""
           ( \s -> case takeDirectory s of
               "." -> do
-                currentDir <- liftIO getCurrentDirectory
-                contents <- liftIO (listDirectory currentDir)
-                areDirs <- liftIO $ mapM doesDirectoryExist contents
-                return
-                  [ let f' = (if isDir then f <> "/" else f)
-                     in Completion f' f' (not isDir)
-                  | (f, isDir) <- zip contents areDirs
-                  , s `isPrefixOf` f
-                  ]
+                importPaths <- maybe [] (splitOn (== ':')) <$> lookupEnv "LC_IMPORT_PATH"
+                liftIO ((: importPaths) <$> getCurrentDirectory)
+                  >>= foldMapM \targetDir -> do
+                    contents <- liftIO (listDirectory targetDir)
+                    areDirs <- liftIO $
+                      forM contents \x ->
+                        liftA2 (||) (doesDirectoryExist x) (doesDirectoryExist $ targetDir </> x)
+                    return
+                      [ let f' = (if isDir then f <> "/" else f)
+                         in Completion f' f' (not isDir)
+                      | (f, isDir) <- zip contents areDirs
+                      , s `isPrefixOf` f
+                      ]
               dir -> do
-                currentDir <- (</> dir) <$> liftIO getCurrentDirectory
-                contents <- liftIO (listDirectory currentDir)
-                areDirs <- liftIO $ mapM (doesDirectoryExist . (currentDir </>)) contents
-                return
-                  [ let f' = (if isDir then f <> "/" else f)
-                     in Completion (dir </> f') f' (not isDir)
-                  | (f, isDir) <- zip contents areDirs
-                  , takeFileName s `isPrefixOf` f
-                  ]
+                importPaths <- maybe [] (splitOn (== ':')) <$> lookupEnv "LC_IMPORT_PATH"
+                liftIO (map (</> dir) . (: importPaths) <$> getCurrentDirectory)
+                  >>= foldMapM \targetDir -> do
+                    ifM
+                      (liftIO $ doesDirectoryExist targetDir)
+                      ( do
+                          contents <- liftIO (listDirectory targetDir)
+                          areDirs <- liftIO $
+                            forM contents \x ->
+                              liftA2 (||) (doesDirectoryExist x) (doesDirectoryExist $ targetDir </> x)
+                          return
+                            [ let f' = (if isDir then f <> "/" else f)
+                               in Completion (dir </> f') f' (not isDir)
+                            | (f, isDir) <- zip contents areDirs
+                            , takeFileName s `isPrefixOf` f
+                            ]
+                      )
+                      (return [])
           )
           fnCompletion
 
@@ -115,3 +126,11 @@ lcRepl table = do
                 loop
             )
         Nothing -> pass
+
+splitOn :: (Char -> Bool) -> String -> [String]
+splitOn f s = case dropWhile f s of
+  "" -> []
+  s' -> w : splitOn f s''
+    where
+      (w, s'') =
+        break f s'

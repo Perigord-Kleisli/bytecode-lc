@@ -12,6 +12,8 @@ import Data.Set qualified as S
 import LCDiagram.Bytecode.Parser
 import LCDiagram.Bytecode.Types
 import LCDiagram.Parser
+import System.Directory (doesFileExist)
+import System.FilePath ((</>))
 import Text.Megaparsec (eof, errorBundlePretty, runParser)
 
 data CompilerState a = CompilerState
@@ -66,10 +68,35 @@ lcCompiler src = execState (mapM_ lcDecCompiler src) (CompilerState [] "") ^. #s
     capturedVals passedVals (Abs arg body) =
       capturedVals (S.insert arg passedVals) body
 
+splitOn :: (Char -> Bool) -> String -> [String]
+splitOn f s = case dropWhile f s of
+  "" -> []
+  s' -> w : splitOn f s''
+    where
+      (w, s'') =
+        break f s'
+
+readFromImportPath :: FilePath -> IO ByteString
+readFromImportPath path = do
+  paths <- maybe [] (splitOn (== ':')) <$> lookupEnv "LC_IMPORT_PATH"
+  maybe (fail $ "file '" <> path <> "' does not exist") pure . viaNonEmpty head =<< mapMaybeM getExisting (path : paths)
+  where
+    getExisting ((</> path) -> path') = do
+      ifM
+        (doesFileExist path')
+        (Just <$> readFileBS path')
+        $ ifM
+          (doesFileExist $ path' <> ".lc")
+          (Just <$> readFileBS (path' <> ".lc"))
+        $ ifM
+          (doesFileExist $ path' <> ".lc.o")
+          (Just <$> readFileBS (path' <> ".lc.o"))
+          (pure Nothing)
+
 compileFile :: FilePath -> IO (SymbolTable a)
 compileFile file = do
   catch (decodeSymbolTable file) \(_ :: IOException) -> do
-    lcFile <- readFileBS file >>= either (fail . show) pure . decodeUtf8'
+    lcFile <- readFromImportPath file >>= either (fail . show) pure . decodeUtf8'
     case runParser (lcParser <* eof) file lcFile of
       Left e' -> fail $ errorBundlePretty e'
       Right x -> return (lcCompiler x)

@@ -1,5 +1,6 @@
-module LCDiagram.Args (Command (..), Options (..), compilerOpts) where
+module LCDiagram.Options (Command (..), Options (..), compilerOpts) where
 
+import PyF
 import System.Console.GetOpt
 
 data Command = Run | Compile | Repl | Link deriving stock (Show)
@@ -57,9 +58,14 @@ compilerOpts argv =
     (o, n, []) -> case repeatedlyApply o defaultOptions of
       Just o' -> return o' {files = n}
       Nothing -> fail "Invalid combination of commands"
-    (_, _, errs) -> fail (concat errs ++ usageInfo header options)
+    (_, _, errs) -> fail (concat errs ++ usageInfo header options ++ usedEnvars)
   where
     header = "Usage: lc [OPTION...] files..."
+    usedEnvars =
+      [fmtTrim|
+          Environment Variables:
+            LC_IMPORT_PATH            Directories where `import` will search for files
+        |]
     repeatedlyApply :: [a -> Maybe a] -> a -> Maybe a
     repeatedlyApply [] x = Just x
     repeatedlyApply (f : xs) x = repeatedlyApply xs =<< f x

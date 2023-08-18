@@ -3,7 +3,7 @@
 
 module Main (main) where
 
-import LCDiagram.Args
+import LCDiagram.Options
 import LCDiagram.Bytecode.Compiler
 import LCDiagram.Bytecode.Execution (runLC)
 import LCDiagram.Bytecode.Parser (encodeSymbolTable)

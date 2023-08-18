@@ -53,6 +53,7 @@ common shared
     OverloadedStrings
     PolyKinds
     PostfixOperators
+    QuasiQuotes
     RankNTypes
     ScopedTypeVariables
     StandaloneDeriving
@@ -86,12 +87,12 @@ common shared
 executable lc
   import:        shared
   other-modules:
-    LCDiagram.Args
     LCDiagram.Bytecode.Compiler
     LCDiagram.Bytecode.Execution
     LCDiagram.Bytecode.Interpreter
     LCDiagram.Bytecode.Parser
     LCDiagram.Bytecode.Types
+    LCDiagram.Options
     LCDiagram.Parser
     LCDiagram.Repl
 
