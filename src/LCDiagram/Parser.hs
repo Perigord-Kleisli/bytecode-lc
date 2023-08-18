@@ -6,7 +6,7 @@ module LCDiagram.Parser (LCExpr (..), LCDec (..), lcParser, lcExpr, lcDec, lcImp
 import Data.Char
 import PyF (fmt)
 import Text.Megaparsec as M
-import Text.Megaparsec.Char (char, space1)
+import Text.Megaparsec.Char (char, space1, eol, string)
 import Text.Megaparsec.Char.Lexer qualified as L
 import Text.Parser.Combinators qualified as C
 
@@ -111,8 +111,12 @@ lcImport =
     $ lexeme
     $ symbol "import" *> ((char '"' >> manyTill L.charLiteral (char '"')) <?> "string literal")
 
+shebang :: Parser ()
+shebang = void $ optional (string "#!" *> manyTill anySingle eol)
+
 lcParser :: Parser [LCDec]
-lcParser =
+lcParser = do 
+  _ <- shebang
   M.some
     ( choice
         [ lcImport <?> "Import Statement"

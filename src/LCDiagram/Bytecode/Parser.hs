@@ -61,9 +61,12 @@ encodeSymbolTable syms =
     encodeBinding (name, Function (FnVals code' [])) = encodeUtf8 name <> ")" <> foldr (<>) "" (fmap encodeInstruction code')
     encodeBinding _ = error "Can only encode lambda functions"
 
+shebang :: Parser ()
+shebang = void $ optional (string "#!" *> manyTill anySingle eol)
+
 decodeSymbolTable :: FilePath -> IO (SymbolTable a)
 decodeSymbolTable file = do
   conts <- readFileBS file
-  case runParser symboltable file conts of
+  case runParser (shebang *> symboltable <* eof) file conts of
     Left e -> fail $ errorBundlePretty e
     Right x -> pure x
