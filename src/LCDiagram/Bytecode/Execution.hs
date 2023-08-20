@@ -7,8 +7,11 @@ import Data.Map qualified as M
 import LCDiagram.Bytecode.Interpreter
 import LCDiagram.Bytecode.Types
 
-runLC :: (Show a, Num a) => SymbolTable a -> IO a
-runLC table = do
+runLC :: (Show a, Num a) => FilePath -> SymbolTable a -> IO a
+runLC mainFileLoc table = do
+  imports' <- case table M.!? "imports" of
+    Just (Function (FnVals x [])) -> return x
+    _ -> return []
   main' <- case table M.!? "main" of
     Nothing -> fail "No `main` function defined"
     Just x -> return x
@@ -20,10 +23,14 @@ runLC table = do
       , stack =
           [ StackFrame
               { symbols = []
-              , instructions = main' & #_Function . #code <>~ [Call]
+              , instructions =
+                  main'
+                    & #_Function . #code <>~ [Call]
+                    & #_Function . #code %~ (imports' <>)
               , content = [Succesor (+ 1), Value 0]
               }
           ]
       , input = 0
-      , globals = M.delete "main" table
+      , globals = M.delete "imports" $ M.delete "main" table
+      , mainFileDir = mainFileLoc
       }

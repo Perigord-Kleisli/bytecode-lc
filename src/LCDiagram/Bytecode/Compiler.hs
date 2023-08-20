@@ -12,6 +12,7 @@ import Data.Set qualified as S
 import LCDiagram.Bytecode.Parser
 import LCDiagram.Bytecode.Types
 import LCDiagram.Parser
+import Shower (shower)
 import System.Directory (doesFileExist)
 import System.FilePath ((</>))
 import Text.Megaparsec (eof, errorBundlePretty, runParser)
@@ -29,7 +30,7 @@ lcCompiler src = execState (mapM_ lcDecCompiler src) (CompilerState [] "") ^. #s
   where
     lcDecCompiler :: LCDec -> Compiler a ()
     lcDecCompiler (ImportDec path) = do
-      #symbols . ix "main" . #_Function . #code %= (Import path Se.<|)
+      #symbols %= M.insert "imports" (Function $ FnVals {code = [Import path], captures = []})
     lcDecCompiler (Def name expr) = do
       #focusedName .= name
       expr' <- lcExprCompiler expr

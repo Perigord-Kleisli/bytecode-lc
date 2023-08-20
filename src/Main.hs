@@ -3,12 +3,22 @@
 
 module Main (main) where
 
-import LCDiagram.Options
+import Data.Map qualified as M
 import LCDiagram.Bytecode.Compiler
 import LCDiagram.Bytecode.Execution (runLC)
 import LCDiagram.Bytecode.Parser (encodeSymbolTable)
+import LCDiagram.Options
 import LCDiagram.Repl
 import System.Directory
+import System.FilePath
+
+-- TODO: Fix importing
+
+findM :: (Foldable t, Monad m) => (a -> m Bool) -> t a -> m (Maybe a)
+findM p = foldr (\x -> ifM (p x) (pure $ Just x) ) (pure Nothing)
+
+getMainFile :: [FilePath] -> IO (Maybe FilePath)
+getMainFile = findM (fmap (M.member "main") . compileFile)
 
 main :: IO ()
 main = do
@@ -19,7 +29,12 @@ main = do
     Run ->
       case files of
         [] -> lcRepl []
-        _ -> print @Int =<< runLC . mconcat =<< mapM compileFile files
+        _ -> do 
+          mainFile <- getMainFile files >>= \case 
+            Just x -> pure x 
+            Nothing -> fail "No main function located in any of the chosen files"
+          syms <- mconcat <$> mapM compileFile files
+          print @Int =<< runLC (takeDirectory mainFile) syms
     Link -> do
       case files of
         (_ : _ : _) -> do
@@ -37,3 +52,5 @@ main = do
             fail $ "Directory '" <> show (fromMaybe "" outputPath) <> "' does not exist"
           forM_ files \file -> do
             compileFile file >>= writeFileBS (fromMaybe (file <> ".o") outputPath) . encodeSymbolTable
+    Make path makeExe -> do
+      undefined

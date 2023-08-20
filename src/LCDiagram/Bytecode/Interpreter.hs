@@ -17,6 +17,7 @@ import GHC.IO.Handle (hSetEcho)
 import LCDiagram.Bytecode.Compiler (compileFile)
 import LCDiagram.Bytecode.Types
 import PyF
+import System.FilePath ((</>))
 import System.IO (getChar)
 
 data VMState a = VMState
@@ -24,6 +25,7 @@ data VMState a = VMState
   , stack :: Seq (StackFrame a)
   , succesor :: a -> a
   , globals :: SymbolTable a
+  , mainFileDir :: FilePath
   }
   deriving stock (Generic)
 
@@ -146,6 +148,7 @@ exec = do
           globals <- gets globals
           input <- gets input
           succesor <- gets succesor
+          mainFileDir <- gets mainFileDir
           (>>= print) $
             evalStateT
               exec
@@ -160,11 +163,13 @@ exec = do
                         }
                     ]
                 , globals
+                , mainFileDir
                 }
           push x
       advance
     Import file -> do
-      syms <- liftIO $ compileFile file
+      fileDir <- gets mainFileDir
+      syms <- liftIO $ compileFile (fileDir </> file)
       #globals <>= syms
       advance
     Read -> do
