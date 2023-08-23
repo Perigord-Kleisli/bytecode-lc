@@ -10,70 +10,79 @@
   };
 
   outputs = inputs:
-    inputs.flake-parts.lib.mkFlake { inherit inputs; } {
+    inputs.flake-parts.lib.mkFlake {inherit inputs;} {
       systems = import inputs.systems;
       imports = [
         inputs.haskell-flake.flakeModule
         inputs.treefmt-nix.flakeModule
       ];
-      perSystem =
-        { self'
-        , config
-        , pkgs
-        , ...
-        }: {
-          haskellProjects.default = {
-            # Development shell configuration
-            devShell = {
-              hlsCheck.enable = false;
-            };
-
-            packages = {
-              # directory.source = "1.3.8.1";
-              # filepath.source = "1.4.100.4";
-              # unix.source = "2.8.1.1";
-            };
-
-            # What should haskell-flake add to flake outputs?
-            autoWire = [ "packages" "apps" "checks" ]; # Wire all but the devShell
+      perSystem = {
+        self',
+        config,
+        pkgs,
+        ...
+      }: {
+        haskellProjects.default = {
+          settings = {
+            "lambda-calculus-diagram".extraBuildDepends = [pkgs.makeWrapper];
+            "lambda-calculus-diagram".custom = pkg:
+              pkg.overrideAttrs (oldAttrs: {
+                installPhase =
+                  oldAttrs.installPhase
+                  + ''
+                    cp -r ./libs "$out/libs"
+                  '';
+                postInstall = ''
+                  wrapProgram "$out/bin/lc" --suffix LC_IMPORT_PATH ':' "$out/libs"
+                '';
+              });
           };
 
-          # Auto formatters. This also adds a flake check to ensure that the
-          # source tree was auto formatted.
-          treefmt.config = {
-            projectRootFile = "flake.nix";
-
-            programs.ormolu.enable = true;
-            programs.nixpkgs-fmt.enable = true;
-            programs.cabal-fmt.enable = true;
-            programs.hlint.enable = true;
-
-            # We use fourmolu
-            programs.ormolu.package = pkgs.haskellPackages.fourmolu;
-            settings.formatter.ormolu = {
-              options = [
-                "--ghc-opt"
-                "-XImportQualifiedPost"
-              ];
-            };
+          # Development shell configuration
+          devShell = {
+            hlsCheck.enable = false;
           };
 
-          # Default package & app.
-          packages.default = self'.packages."lambda-calculus-diagram";
-          apps.default = self'.apps."lambda-calculus-diagram";
+          # What should haskell-flake add to flake outputs?
+          autoWire = ["packages" "apps" "checks"]; # Wire all but the devShell
+        };
 
-          # Default shell.
-          devShells.default = pkgs.mkShell {
-            name = "lambda-calculus-diagram";
-            # See https://zero-to-flakes.com/haskell-flake/devshell#composing-devshells
-            inputsFrom = [
-              config.haskellProjects.default.outputs.devShell
-              config.treefmt.build.devShell
-            ];
-            nativeBuildInputs = with pkgs; [
-              just
+        # Auto formatters. This also adds a flake check to ensure that the
+        # source tree was auto formatted.
+        treefmt.config = {
+          projectRootFile = "flake.nix";
+
+          programs.ormolu.enable = true;
+          programs.nixpkgs-fmt.enable = true;
+          programs.cabal-fmt.enable = true;
+          programs.hlint.enable = true;
+
+          # We use fourmolu
+          programs.ormolu.package = pkgs.haskellPackages.fourmolu;
+          settings.formatter.ormolu = {
+            options = [
+              "--ghc-opt"
+              "-XImportQualifiedPost"
             ];
           };
         };
+
+        # Default package & app.
+        packages.default = self'.packages."lambda-calculus-diagram";
+        apps.default = self'.apps."lc";
+
+        # Default shell.
+        devShells.default = pkgs.mkShell {
+          name = "lambda-calculus-diagram";
+          # See https://zero-to-flakes.com/haskell-flake/devshell#composing-devshells
+          inputsFrom = [
+            config.haskellProjects.default.outputs.devShell
+            config.treefmt.build.devShell
+          ];
+          nativeBuildInputs = with pkgs; [
+            just
+          ];
+        };
+      };
     };
 }

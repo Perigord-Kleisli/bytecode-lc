@@ -6,7 +6,7 @@ module LCDiagram.Parser (LCExpr (..), LCDec (..), lcParser, lcExpr, lcDec, lcImp
 import Data.Char
 import PyF (fmt)
 import Text.Megaparsec as M
-import Text.Megaparsec.Char (char, space1, eol, string)
+import Text.Megaparsec.Char (char, eol, space1, string)
 import Text.Megaparsec.Char.Lexer qualified as L
 import Text.Parser.Combinators qualified as C
 
@@ -41,15 +41,9 @@ symbol = L.symbol space
 parens :: forall {a}. Parser a -> Parser a
 parens = between (symbol "(") (symbol ")") . lexeme
 
-reserved :: [Tokens Text]
-reserved = ["import"]
-
 identifier :: Parser Text
 identifier =
-  takeWhile1P (Just "a valid Var character") validVarChar >>= \s ->
-    if s `elem` reserved
-      then fail [fmt|Identifier cannot be reserved keyword '{s}'|]
-      else return s
+  takeWhile1P (Just "a valid Var character") validVarChar
   where
     validVarChar c
       | isSpace c
@@ -61,10 +55,7 @@ identifier =
 
 defIdentifier :: Parser Text
 defIdentifier =
-  takeWhile1P (Just "a valid Var character") validVarChar >>= \s ->
-    if s `elem` reserved
-      then fail [fmt|Identifier cannot be reserved keyword '{s}'|]
-      else return s
+  takeWhile1P (Just "a valid Var character") validVarChar
   where
     validVarChar c
       | isSpace c
@@ -108,14 +99,14 @@ lcImport :: Parser LCDec
 lcImport =
   nonIndented
     . fmap ImportDec
-    $ lexeme
-    $ symbol "import" *> ((char '"' >> manyTill L.charLiteral (char '"')) <?> "string literal")
+    . lexeme
+    $ symbol "import" *> char '"' *> manyTill L.charLiteral (char '"')
 
 shebang :: Parser ()
 shebang = void $ optional (string "#!" *> manyTill anySingle eol)
 
 lcParser :: Parser [LCDec]
-lcParser = do 
+lcParser = do
   _ <- shebang
   M.some
     ( choice
