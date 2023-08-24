@@ -78,6 +78,7 @@ common shared
     , mtl
     , parser-combinators
     , parsers
+    , pureMD5
     , PyF
     , relude
     , shower
@@ -95,8 +96,10 @@ executable lc
     LCDiagram.Bytecode.Types
     LCDiagram.Options
     LCDiagram.Parser
+    LCDiagram.Types
     LCDiagram.Repl
     LCDiagram.Repl.Commands
     LCDiagram.Repl.Completion
+    LCDiagram.Repl.Types
 
   main-is:       Main.hs

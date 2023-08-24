@@ -30,9 +30,9 @@ data Function a
   | Value a
   deriving stock (Generic)
 
-instance Show a => Show (Function a) where
+instance Show (Function a) where
   show (Function (FnVals {code})) = "<<" <> Prelude.show (toList code) <> ">>"
-  show (Value a) = "Value " ++ Prelude.show a
+  show (Value _) = "Value"
   show (Succesor _) = "<<SUCCESOR>>"
 
 data StackFrame a = StackFrame

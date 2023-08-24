@@ -1,10 +1,9 @@
-{-# LANGUAGE QuasiQuotes #-}
 {-# LANGUAGE NoOverloadedLists #-}
 
 module LCDiagram.Parser (LCExpr (..), LCDec (..), lcParser, lcExpr, lcDec, lcImport, Parser) where
 
 import Data.Char
-import PyF (fmt)
+import Data.Text qualified as T
 import Text.Megaparsec as M
 import Text.Megaparsec.Char (char, eol, space1, string)
 import Text.Megaparsec.Char.Lexer qualified as L
@@ -43,11 +42,10 @@ parens = between (symbol "(") (symbol ")") . lexeme
 
 identifier :: Parser Text
 identifier =
-  takeWhile1P (Just "a valid Var character") validVarChar
+  liftA2 T.cons (satisfy \c -> validVarChar c && not (isDigit c)) $ takeWhileP (Just "a valid Var character") validVarChar
   where
     validVarChar c
       | isSpace c
-          || isDigit c
           || isControl c
           || c `elem` ("().\\λ" :: String) =
           False
@@ -55,11 +53,10 @@ identifier =
 
 defIdentifier :: Parser Text
 defIdentifier =
-  takeWhile1P (Just "a valid Var character") validVarChar
+  liftA2 T.cons (satisfy \c -> validVarChar c && not (isDigit c)) $ takeWhileP (Just "a valid Var character") validVarChar
   where
     validVarChar c
       | isSpace c
-          || isDigit c
           || isControl c
           || c `elem` ("().\\λ=" :: String) =
           False

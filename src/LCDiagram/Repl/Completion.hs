@@ -6,16 +6,17 @@ import System.Console.Haskeline
 import Control.Lens
 import Data.Char
 import LCDiagram.Bytecode.Interpreter
+import LCDiagram.Repl.Types (ReplSt, ReplState (..))
 import System.Directory
 import System.FilePath
 
-lcCompletion :: CompletionFunc (StateT (VMState a) IO)
+lcCompletion :: CompletionFunc (ReplSt a)
 lcCompletion (l, r)
   | "import" `isPrefixOf` reverse l = completeQuotedWord (Just '\\') ['"'] dirCompletion noCompletion (l, r)
   | ":" `isPrefixOf` reverse l = completeWord' Nothing isSpace cmdCompletion (l, r)
   | otherwise = fnCompletion (l, r)
 
-cmdCompletion :: String -> StateT (VMState a) IO [Completion]
+cmdCompletion :: String -> ReplSt a [Completion]
 cmdCompletion (':' : s) =
   do pure
     [ Completion (':' : cmd) cmd True
@@ -24,25 +25,25 @@ cmdCompletion (':' : s) =
     ]
 cmdCompletion s = snd <$> completeWord' Nothing isSpace dirCompletion (reverse s, [])
 
-fnCompletion :: CompletionFunc (StateT (VMState a) IO)
+fnCompletion :: CompletionFunc (ReplSt a)
 fnCompletion = completeWord' Nothing isSpace \s -> do
-  stackFrame <- gets (^. #stack . _head . #symbols)
-  closure <- gets (^. #stack . _head . #instructions . #_Function . #captures)
-  globals' <- gets (^. #globals)
+  stackFrame <- gets (^. #vm . #stack . _head . #symbols)
+  closure <- gets (^. #vm . #stack . _head . #instructions . #_Function . #captures)
+  globals' <- gets (^. #vm . #globals)
   let keys = map (toString . fst) $ M.toList (stackFrame <> closure <> globals')
   return $
-      [ Completion (if k == "import" then "import \"" else k) k (k /= "import")
-      | k <- [":", "trace", "read", "import"] <> keys
-      , '.' `notElem` k
-      , s `isPrefixOf` k
-      , k /= "main"
-      ]
+    [ Completion (if k == "import" then "import \"" else k) k (k /= "import")
+    | k <- [":", "trace", "read", "import"] <> keys
+    , '.' `notElem` k
+    , s `isPrefixOf` k
+    , k /= "main"
+    ]
 
-dirCompletion :: FilePath -> StateT (VMState a) IO [Completion]
+dirCompletion :: FilePath -> (ReplSt a) [Completion]
 dirCompletion s = case takeDirectory s of
   "." -> do
     importPaths <- maybe [] splitSearchPath <$> lookupEnv "LC_IMPORT_PATH"
-    rootDir <- gets mainFileDir
+    rootDir <- gets (mainFileDir . vm)
     flip foldMapM (rootDir : importPaths) \targetDir -> do
       contents <-
         liftIO $
@@ -61,7 +62,7 @@ dirCompletion s = case takeDirectory s of
         ]
   dir -> do
     importPaths <- maybe [] splitSearchPath <$> lookupEnv "LC_IMPORT_PATH"
-    rootDir <- gets mainFileDir
+    rootDir <- gets (mainFileDir . vm)
     flip foldMapM (map (</> dir) (rootDir : importPaths)) \targetDir -> do
       ifM
         (liftIO $ doesDirectoryExist targetDir)

@@ -3,7 +3,12 @@ module LCDiagram.Options (Command (..), Options (..), compilerOpts) where
 import PyF
 import System.Console.GetOpt
 
-data Command = Run | Compile | Repl | Link deriving stock (Show)
+data Command
+  = Run
+  | Compile
+  | Repl
+  | Link
+  deriving stock (Show)
 
 data Options = Options
   { command :: Command

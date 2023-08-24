@@ -4,6 +4,7 @@ module LCDiagram.Bytecode.Execution where
 
 import Control.Lens
 import Data.Map qualified as M
+import LCDiagram.Bytecode.Compiler (compileFile)
 import LCDiagram.Bytecode.Interpreter
 import LCDiagram.Bytecode.Types
 
@@ -15,6 +16,13 @@ runLC mainFileLoc table = do
   main' <- case table M.!? "main" of
     Nothing -> fail "No `main` function defined"
     Just x -> return x
+
+  stdLib <- compileFile "std"
+
+  let traceRead =
+        [ ("trace", Function $ FnVals {code = [Trace], captures = []})
+        , ("read", Function $ FnVals {code = [Read], captures = []})
+        ]
 
   evalStateT
     exec
@@ -31,6 +39,6 @@ runLC mainFileLoc table = do
               }
           ]
       , input = 0
-      , globals = M.delete "imports" $ M.delete "main" table
+      , globals = M.delete "imports" (M.delete "main" table) <> stdLib <> traceRead
       , mainFileDir = mainFileLoc
       }

@@ -5,10 +5,13 @@
 module LCDiagram.Repl.Commands (cmdParser, lcCommand) where
 
 import Control.Lens
+import Data.Map qualified as M
+import LCDiagram.Bytecode.Compiler (compileFileWithHash)
 import LCDiagram.Bytecode.Interpreter
+import LCDiagram.Repl.Types (Repl, ReplState (..))
 import PyF
 import System.Console.Haskeline
-import System.Console.Haskeline.History (historyLines, readHistory)
+import System.Console.Haskeline.History (historyLines)
 import System.Directory
 import System.FilePath
 import Text.Megaparsec
@@ -31,23 +34,28 @@ cmdParser = do
   where
     spaceEsc = char '\\' *> char ' '
 
-lcCommand :: InputT (StateT (VMState a) IO) () -> Command -> InputT (StateT (VMState a) IO) ()
+lcCommand :: Repl a () -> Command -> Repl a ()
 lcCommand loop = \case
   (Command "q" _) -> pass
   (Command "quit" _) -> pass
-  (Command "r" _) -> undefined "TODO: Module Reloading"
-  (Command "reload" _) -> undefined "TODO: Module Reloading"
+  (Command "r" _) -> do
+    reloadCmd
+    loop
+  (Command "reload" _) -> do
+    reloadCmd
+    loop
   (Command "pwd" _) -> do
-    lift $ gets mainFileDir >>= putStrLn
+    lift $ gets (mainFileDir . vm) >>= putStrLn
     loop
   (Command "cd" []) -> do
-    lift $ #mainFileDir .= "."
+    curDir <- liftIO getCurrentDirectory
+    lift $ #vm . #mainFileDir .= curDir
     loop
   (Command "cd" (path : _)) -> do
     ifM
       (liftIO $ doesDirectoryExist (toString path))
       do
-        lift $ #mainFileDir %= (</> toString path)
+        lift $ #vm . #mainFileDir %= changeDir path
         loop
       do
         putStrLn $ "path '" <> path <> "' does not exist"
@@ -65,3 +73,24 @@ lcCommand loop = \case
   (Command cmdname _) -> do
     putStrLn [fmt|No command '{cmdname}'|]
     loop
+
+changeDir :: FilePath -> FilePath -> FilePath
+changeDir toPath fromPath =
+  if isAbsolute toPath
+    then toPath
+    else normalise $ expandPath $ splitDirectories (fromPath </> toPath)
+  where
+    expandPath (_ : ".." : xs) = expandPath xs
+    expandPath (x : "." : xs) = x </> expandPath xs
+    expandPath (x : xs) = x </> expandPath xs
+    expandPath [] = ""
+
+reloadCmd :: Repl a ()
+reloadCmd = void do
+  lift (gets loadedFiles) >>= M.traverseWithKey \path hash -> do
+    (hash', syms) <- liftIO $ compileFileWithHash path
+    unless (hash == hash') do
+      putStrLn $ "Reloading file: '" <> path <> "'"
+      lift do
+        #vm . #globals %= M.union syms
+        #loadedFiles . ix path .= hash'

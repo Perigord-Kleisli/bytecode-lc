@@ -9,17 +9,20 @@ import System.Console.Haskeline
 import System.FilePath
 import Text.Megaparsec hiding (try)
 
+import Data.Map qualified as M
 import LCDiagram.Bytecode.Compiler
 import LCDiagram.Bytecode.Execution
-import LCDiagram.Bytecode.Interpreter (VM, VMState (..))
+import LCDiagram.Bytecode.Interpreter (VMState (..))
 import LCDiagram.Bytecode.Types
 import LCDiagram.Parser
 import LCDiagram.Repl.Commands
 import LCDiagram.Repl.Completion (lcCompletion)
+import LCDiagram.Repl.Types (ReplState (..))
 
-lcRepl :: (VM m a, m ~ StateT (VMState a) IO, a ~ Int) => SymbolTable a -> IO ()
-lcRepl table = do
+lcRepl :: FilePath -> SymbolTable Int -> IO ()
+lcRepl path table = do
   historyFile <- liftIO $ fmap (</> "lc") <$> lookupEnv "XDG_STATE_HOME"
+  stdLib <- compileFile "std"
   evalStateT
     ( runInputT
         Settings
@@ -29,12 +32,16 @@ lcRepl table = do
           }
         loop
     )
-    VMState
-      { succesor = (+ 1)
-      , stack = []
-      , input = 0
-      , globals = table
-      , mainFileDir = "."
+    ReplState
+      { vm =
+          VMState
+            { succesor = (+ 1)
+            , stack = []
+            , input = 0
+            , globals = table <> stdLib
+            , mainFileDir = path
+            }
+      , loadedFiles = []
       }
   where
     loop = do
@@ -49,21 +56,28 @@ lcRepl table = do
           catch
             do
               case runParser ((lcImport <|> lcDec) <* eof) "<REPL DECLARATION>" (fromString minput) of
-                Right (ImportDec path) -> do
-                  fileDir <- lift $ gets mainFileDir
-                  syms <- liftIO $ compileFile (fileDir </> path)
-                  lift $ #globals <>= syms
+                Right (ImportDec file) -> do
+                  fileDir <- lift $ gets (mainFileDir . vm)
+                  (hash, syms) <- liftIO $ compileFileWithHash (fileDir </> file)
+                  lift do
+                    #vm . #globals %= M.union syms
+                    #loadedFiles %= M.insert file hash
                   loop
                 Right dec -> do
-                  lift $ #globals <>= lcCompiler [dec]
+                  lift $ #vm . #globals <>= lcCompiler [dec]
                   loop
                 Left _ -> do
                   case runParser (lcExpr <* eof) "<REPL EXPR>" (" " <> fromString minput) of
                     Right expr -> do
-                      table' <- lift $ gets (^. #globals)
-                      mainFileLoc <- lift $ gets mainFileDir
-                      v <- liftIO $ runLC mainFileLoc (lcCompiler [Def "main" expr] <> table')
-                      print v
+                      table' <- lift $ gets (^. #vm . #globals)
+                      mainFileLoc <-
+                        lift $
+                          gets
+                            (mainFileDir . vm)
+                      handle (\Interrupt -> outputStrLn "Interrupted.") $
+                        withInterrupt do
+                          v <- liftIO $ runLC mainFileLoc (lcCompiler [Def "main" expr] <> table')
+                          print v
                       loop
                     Left e -> fail $ errorBundlePretty e
             ( \(e :: IOException) -> do

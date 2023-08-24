@@ -12,10 +12,8 @@ import LCDiagram.Repl
 import System.Directory
 import System.FilePath
 
--- TODO: Fix importing
-
 findM :: (Foldable t, Monad m) => (a -> m Bool) -> t a -> m (Maybe a)
-findM p = foldr (\x -> ifM (p x) (pure $ Just x) ) (pure Nothing)
+findM p = foldr (\x -> ifM (p x) (pure $ Just x)) (pure Nothing)
 
 getMainFile :: [FilePath] -> IO (Maybe FilePath)
 getMainFile = findM (fmap (M.member "main") . compileFile)
@@ -25,14 +23,20 @@ main = do
   Options {command, files, outputPath} <- getArgs >>= compilerOpts
 
   case command of
-    Repl -> lcRepl . mconcat =<< mapM compileFile files
+    Repl -> do
+      getMainFile files >>= \case
+        Just file' -> lcRepl (takeDirectory file') . mconcat =<< mapM compileFile files
+        Nothing -> do
+          curDir <- getCurrentDirectory
+          lcRepl curDir . mconcat =<< mapM compileFile files
     Run ->
       case files of
-        [] -> lcRepl []
-        _ -> do 
-          mainFile <- getMainFile files >>= \case 
-            Just x -> pure x 
-            Nothing -> fail "No main function located in any of the chosen files"
+        [] -> getCurrentDirectory >>= flip lcRepl []
+        _ -> do
+          mainFile <-
+            getMainFile files >>= \case
+              Just x -> pure x
+              Nothing -> fail "No main function located in any of the chosen files"
           syms <- mconcat <$> mapM compileFile files
           print @Int =<< runLC (takeDirectory mainFile) syms
     Link -> do
@@ -52,5 +56,3 @@ main = do
             fail $ "Directory '" <> show (fromMaybe "" outputPath) <> "' does not exist"
           forM_ files \file -> do
             compileFile file >>= writeFileBS (fromMaybe (file <> ".o") outputPath) . encodeSymbolTable
-    Make path makeExe -> do
-      undefined

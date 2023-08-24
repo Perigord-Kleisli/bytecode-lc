@@ -1,4 +1,4 @@
-module LCDiagram.Bytecode.Parser (encodeSymbolTable, decodeSymbolTable) where
+module LCDiagram.Bytecode.Parser (encodeSymbolTable, decodeSymbolTable, hasLcoHeader) where
 
 import Data.ByteString (pack)
 import Data.Map qualified as Map
@@ -7,6 +7,8 @@ import Text.Megaparsec
 import Text.Megaparsec qualified as M
 import Text.Megaparsec.Byte
 import Text.Megaparsec.Byte.Binary
+import qualified Data.ByteString as B
+import LCDiagram.Types (LCError (LCOParseError))
 
 type Parser a = Parsec Void ByteString a
 
@@ -39,6 +41,9 @@ binding = do
 lcoHeader :: ByteString
 lcoHeader = pack [1, 9, 3, 0]
 
+hasLcoHeader :: ByteString -> Bool 
+hasLcoHeader = (lcoHeader `B.isPrefixOf`)
+
 symboltable :: Parser (SymbolTable a)
 symboltable = do
   _ <- string lcoHeader <?> "LCO Header"
@@ -64,9 +69,8 @@ encodeSymbolTable syms =
 shebang :: Parser ()
 shebang = void $ optional (string "#!" *> manyTill anySingle eol)
 
-decodeSymbolTable :: FilePath -> IO (SymbolTable a)
-decodeSymbolTable file = do
-  conts <- readFileBS file
+decodeSymbolTable :: ByteString -> FilePath -> Either LCError (SymbolTable a)
+decodeSymbolTable conts file = do
   case runParser (shebang *> symboltable <* eof) file conts of
-    Left e -> fail $ errorBundlePretty e
-    Right x -> pure x
+    Left e -> Left (LCOParseError e)
+    Right x -> Right x

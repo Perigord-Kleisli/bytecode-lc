@@ -1,10 +1,11 @@
 {-# LANGUAGE OverloadedLists #-}
 
-module LCDiagram.Bytecode.Compiler (lcCompiler, compileFile) where
+module LCDiagram.Bytecode.Compiler (lcCompiler, compileFileWithHash, readFromImportPath, compileFile) where
 
-import Control.Exception (IOException)
+import Control.Arrow (ArrowChoice (left))
+import Control.Exception (throw)
 import Control.Lens
-import Control.Monad.Catch (catch)
+import Data.Digest.Pure.MD5 (MD5Digest, md5)
 import Data.Generics.Labels ()
 import Data.Map qualified as M
 import Data.Sequence qualified as Se
@@ -12,10 +13,11 @@ import Data.Set qualified as S
 import LCDiagram.Bytecode.Parser
 import LCDiagram.Bytecode.Types
 import LCDiagram.Parser
-import Shower (shower)
+import LCDiagram.Types (LCError (..))
 import System.Directory (doesFileExist)
 import System.FilePath ((</>))
-import Text.Megaparsec (eof, errorBundlePretty, runParser)
+import Text.Megaparsec (runParser)
+import Prelude hiding (toStrict)
 
 data CompilerState a = CompilerState
   { symbols :: SymbolTable a
@@ -50,14 +52,10 @@ lcCompiler src = execState (mapM_ lcDecCompiler src) (CompilerState [] "") ^. #s
       #symbols %= M.insert lambdaName (Function $ FnVals ([Store arg] <> body') [])
       let caps = map MakeClosure $ capturedVals [arg] body
       return $ [Load lambdaName] <> fromList caps
-    lcExprCompiler (App (Var "trace") arg) = do
-      arg' <- lcExprCompiler arg
-      return $ arg' <> [Trace]
     lcExprCompiler (App f arg) = do
       f' <- lcExprCompiler f
       arg' <- lcExprCompiler arg
       return $ arg' <> f' <> [Call]
-    lcExprCompiler (Var "read") = return [Read]
     lcExprCompiler (Var name) = return [Load name]
 
     capturedVals :: Set Text -> LCExpr -> [Text]
@@ -77,36 +75,51 @@ splitOn f s = case dropWhile f s of
       (w, s'') =
         break f s'
 
-readFromImportPath :: FilePath -> IO ByteString
-readFromImportPath path = do
+readFromImportPathWithHash :: FilePath -> IO (MD5Digest, ByteString)
+readFromImportPathWithHash path = do
   paths <- maybe [] (splitOn (== ':')) <$> lookupEnv "LC_IMPORT_PATH"
-  maybe (fail $ "file '" <> path <> "' does not exist") pure . viaNonEmpty head =<< mapMaybeM getExisting (path : paths)
+  maybe (fail $ "file '" <> path <> "' does not exist\n" <> "searched: " <> show paths) pure . viaNonEmpty head =<< mapMaybeM getExisting (path : paths)
   where
-    getExisting path' = do
-      ifM
-        (doesFileExist path')
-        (Just <$> readFileBS path')
-        $ ifM
-          (doesFileExist $ path' <> ".lc")
-          (Just <$> readFileBS (path' <> ".lc"))
-        $ ifM
-          (doesFileExist $ path' <> ".lc.o")
-          (Just <$> readFileBS (path' <> ".lc.o"))
-        $ ifM
-          (doesFileExist (path' </> path))
-          (Just <$> readFileBS (path' </> path))
-        $ ifM
-          (doesFileExist (path' </> path <> ".lc"))
-          (Just <$> readFileBS (path' </> path <> ".lc"))
-        $ ifM
-          (doesFileExist (path' </> path <> "lc.o"))
-          (Just <$> readFileBS (path </> path <> "lc.o"))
-          (pure Nothing)
+    getExisting path' =
+      (\x -> (md5 (toLazy x), x))
+        <<$>> ( do
+                  ifM
+                    (doesFileExist path')
+                    (Just <$> readFileBS path')
+                    $ ifM
+                      (doesFileExist $ path' <> ".lc")
+                      (Just <$> readFileBS (path' <> ".lc"))
+                    $ ifM
+                      (doesFileExist $ path' <> ".lc.o")
+                      (Just <$> readFileBS (path' <> ".lc.o"))
+                    $ ifM
+                      (doesFileExist (path' </> path))
+                      (Just <$> readFileBS (path' </> path))
+                    $ ifM
+                      (doesFileExist (path' </> path <> ".lc"))
+                      (Just <$> readFileBS (path' </> path <> ".lc"))
+                    $ ifM
+                      (doesFileExist (path' </> path <> "lc.o"))
+                      (Just <$> readFileBS (path </> path <> "lc.o"))
+                      (pure Nothing)
+              )
+
+readFromImportPath :: FilePath -> IO ByteString
+readFromImportPath = fmap snd . readFromImportPathWithHash
+
+compileBS :: Maybe FilePath -> ByteString -> Either LCError (SymbolTable a)
+compileBS (fromMaybe "" -> file) conts =
+  if hasLcoHeader conts
+    then decodeSymbolTable conts file
+    else
+      bimap OtherError lcCompiler
+        . runParser lcParser file
+        =<< left OtherError (decodeUtf8' conts)
+
+compileFileWithHash :: FilePath -> IO (MD5Digest, SymbolTable a)
+compileFileWithHash file = do
+  (hash, conts) <- readFromImportPathWithHash file
+  either throw (pure . (hash,)) $ compileBS (Just file) conts
 
 compileFile :: FilePath -> IO (SymbolTable a)
-compileFile file = do
-  catch (decodeSymbolTable file) \(_ :: IOException) -> do
-    lcFile <- readFromImportPath file >>= either (fail . show) pure . decodeUtf8'
-    case runParser (lcParser <* eof) file lcFile of
-      Left e' -> fail $ errorBundlePretty e'
-      Right x -> return (lcCompiler x)
+compileFile = fmap snd . compileFileWithHash
